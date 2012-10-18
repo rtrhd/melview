@@ -25,6 +25,9 @@ import os
 os.environ['ETS_TOOLKIT'] = 'qt4'
 os.environ['QT_API'] = 'pyside'
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 import numpy as np
 
 from fsl.melodic import *
@@ -33,8 +36,8 @@ from fsl.melodic import *
 
 # To be able to use PySide or PyQt4 and not run in conflicts with traits,
 # we need to import QtGui and QtCore from pyface.qt
-# from pyface.qt import QtGui, QtCore
-from pyface.api import FileDialog, OK, confirm, error, YES
+#from pyface.qt import QtGui, QtCore
+#from pyface.api import FileDialog, OK, confirm, error, YES
 
 #from PyQt4.QtGui import QWidget, QSizePolicy
 
@@ -49,7 +52,7 @@ from traitsui.api import  Handler, View, Item, \
     UItem, HGroup, HSplit, VSplit, VGroup, Group, \
     RangeEditor, EnumEditor, InstanceEditor
 
-from enthought.traits.ui.api import CustomEditor
+from traitsui.api import CustomEditor
 from enthought.etsconfig.api import ETSConfig
 
 from traitsui.menu import Action
@@ -185,6 +188,7 @@ class CheckboxColumn(ObjectColumn):
         super( CheckboxColumn, self ).__init__( **traits )
         # force the renderer to be a checkbox renderer
 #        self.renderer = CheckboxRenderer()
+
     #---------------------------------------------------------------------------
     #  Returns the cell background color for the column for a specified object: 
     #---------------------------------------------------------------------------
@@ -196,6 +200,7 @@ class CheckboxColumn(ObjectColumn):
         # we override this from the parent class to ALWAYS provide the
         # standard color
         return self.cell_color_
+
     #---------------------------------------------------------------------------
     #  Returns whether the column is editable for a specified object: 
     #---------------------------------------------------------------------------
@@ -341,7 +346,7 @@ class MelodicWindow(HasTraits):
         return M
     
     def __init__(self, path="", bgpath="", ic=1, *args, **kwargs):
-#        print "MelodicWindow.__init__()"
+        logging.debug("MelodicWindow.__init__()")
         super(MelodicWindow, self).__init__(*args, **kwargs)
 #        print "MelodicWindow.__init__() called super"
         self.montage = self.montageXY
@@ -377,7 +382,7 @@ class MelodicWindow(HasTraits):
         finally:
             self.initialised = True
 
-        print "MelodicWindow.__init__()...done"
+        logging.debug("MelodicWindow.__init__()...done")
 
     def dirty(self):
         unsaved = False
@@ -479,7 +484,7 @@ class MelodicWindow(HasTraits):
                 self.display()
 
     def display(self):
-#        print "MelodicWindow.display()"
+        logging.debug("MelodicWindow.display()")
         d=self.mel.get_stat_data()
         b=self.bg_data
     
@@ -524,6 +529,8 @@ class MelodicWindow(HasTraits):
         
         if self.initialised:
             self.lbox.canvas.draw()
+            
+        logging.debug("MelodicWindow.display()... done")
 
     @on_trait_change('view_orientation')
     def orientationChange(self, orient):
@@ -563,8 +570,8 @@ class MelodicWindow(HasTraits):
         
         if obj:
             self.mel.select_component(obj.ic_number)
-            if self.initialised:
-                self.display()
+#            if self.initialised:
+#                self.display()
                 
         self.needs_saving = self.dirty()
         self.reset_lut()
