@@ -22,6 +22,7 @@
 """
 
 import os
+import re
 os.environ['ETS_TOOLKIT'] = 'qt4'
 os.environ['QT_API'] = 'pyside'
 
@@ -64,6 +65,21 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from nibabel.spatialimages import ImageFileError
 #import gc
+
+from configobj import ConfigObj
+import validate
+
+validator = validate.Validator()
+opts= """
+plot_height = float(default=400)
+plot_width = float(default=0.8)
+height = float(default=0.8)
+width = float(default=0.8)
+ncols = integer(default=0)
+"""
+settings_file = os.path.join(os.path.expanduser('~'), '.melviewrc')
+settings = ConfigObj(settings_file, configspec = opts.split("\n"))
+settings.validate(validator, copy=True)
 
 class _MPLFigureEditor(Editor):
 
@@ -174,39 +190,42 @@ class Classification(HasTraits):
 
 from traitsui.api import TableEditor
 from traitsui.table_column import ObjectColumn
-#from pyface.ui.wx.grid.checkbox_renderer \
-#    import CheckboxRenderer
+from enthought.traits.api import Color
+from enthought.traits.ui.api import TabularEditor
 
-class CheckboxColumn(ObjectColumn):
+class ClassificationColumn(ObjectColumn):
     
-    def __init__ ( self, **traits ):
-        """ Initializes the object.
-        """
-        super( CheckboxColumn, self ).__init__( **traits )
-        # force the renderer to be a checkbox renderer
-#        self.renderer = CheckboxRenderer()
-    #---------------------------------------------------------------------------
-    #  Returns the cell background color for the column for a specified object: 
-    #---------------------------------------------------------------------------
-   
     def get_cell_color ( self, object ):
-        """ Returns the cell background color for the column for a specified
-            object.
-        """
-        # we override this from the parent class to ALWAYS provide the
-        # standard color
-        return self.cell_color_
-    #---------------------------------------------------------------------------
-    #  Returns whether the column is editable for a specified object: 
-    #---------------------------------------------------------------------------
-               
-    def is_editable ( self, object ):
-        """ Returns whether the column is editable for a specified object.
-        """
-        # Although a checkbox column is always editable, we return this
-        # to keep a standard editor from appearing. The editing is handled
-        # in the renderer's handlers.
-        return False
+        return [ 'light blue', 'yellow' ][ object.class_name in ['Signal']]
+
+#class CheckboxColumn(ObjectColumn):
+#    
+#    def __init__ ( self, **traits ):
+#        """ Initializes the object.
+#        """
+#        super( CheckboxColumn, self ).__init__( **traits )
+#    #---------------------------------------------------------------------------
+#    #  Returns the cell background color for the column for a specified object: 
+#    #---------------------------------------------------------------------------
+#   
+#    def get_cell_color ( self, object ):
+#        """ Returns the cell background color for the column for a specified
+#            object.
+#        """
+#        # we override this from the parent class to ALWAYS provide the
+#        # standard color
+#        return self.cell_color_
+#    #---------------------------------------------------------------------------
+#    #  Returns whether the column is editable for a specified object: 
+#    #---------------------------------------------------------------------------
+#               
+#    def is_editable ( self, object ):
+#        """ Returns whether the column is editable for a specified object.
+#        """
+#        # Although a checkbox column is always editable, we return this
+#        # to keep a standard editor from appearing. The editing is handled
+#        # in the renderer's handlers.
+#        return False
 
 class MelodicWindowHandler(Handler):
     
@@ -282,10 +301,117 @@ class MelodicWindow(HasTraits):
     lbox   = Instance(Figure, ())
     plots  = Instance(Figure, ())
 
-    def montageXZ(self, X, colormap=cm.gist_gray):
+    nics = Int(1)
+    ic   = Int(0)
+
+    tr   = Float(2.0)
+
+    lut_min = Float(0)
+    lut_max = Float(10)
+    background_min = Float(0)
+    background_max = Float(10)
+
+    ncols = Int(settings['ncols'])
+       
+    needs_saving = Bool(False)
+
+    show_stats = Bool(True)
+    ignore_blank_slices = Bool(True)
+
+    filedir  = Str
+    filename = Str
+    file_wildcard = Str("Text file (*.txt)|*.txt|Data file (*.dat)|*.dat|All files|*")
+
+#    quit    = Action(name="Quit", action='do_quit')
+
+    load    = Action(name = "Load classifications...", action = "do_load")
+    save    = Action(name = "Save classifications", action = "do_save",
+             enabled_when='needs_saving and filename is not ""')
+    save_as = Action(name = "Save as...", action = "do_save_as", enabled_when='needs_saving')
+
+#    reset = Action(name="Reset LUT", action='do_reset_lut')
+
+    reset_button = Button(label="Reset LUT to data max/min")
+    record_zoom  = Button(label="Record Zoom")
+    reset_zoom   = Button(label="Reset Zoom")
+    
+    from traitsui.key_bindings import KeyBinding, KeyBindings
+
+    key_bindings = KeyBindings(
+    KeyBinding( binding1 = 'Ctrl-A',
+            description = 'previous IC',
+            method_name = '_prev_button_fired' ),
+    KeyBinding( binding1 = 'Ctrl-Z',
+            description = 'next IC',
+            method_name = '_next_button_fired' )
+    )
+
+    ic_selected = Instance(Classification)
+
+    ic_list_editor = TableEditor(columns = [ ClassificationColumn( name='ic_number', label='IC#', editable=False ), 
+                                             ClassificationColumn( name='class_name' ) ],
+                                selected         = 'ic_selected',
+                                selection_mode   = 'row',
+                                rows             = 5,
+                                row_factory      = Classification)
+    
+    orientation_names = ['XY', 'XZ', 'YZ']
+    view_orientation = Enum(values='orientation_names')
+
+    view = View(
+                Group(
+                      VSplit(
+                             HSplit(
+                                    Item('lbox',
+                                         editor=MPLFigureEditor(),
+                                         show_label=False, width=settings['plot_width'], height=settings['plot_height']),
+                                    Item('class_list',
+                                         editor=ic_list_editor,
+                                         show_label=False, springy=False, resizable=False)
+                                    ),
+                             HSplit(
+                                    Item('plots',
+                                         editor=MPLFigureEditor(),
+                                         show_label=False, width=0.7, height=0.2),
+                                    VGroup(Item('ic_selected', label='Classification', style='custom'),
+                                           HGroup(Item('show_stats', label='Show statistics'),
+                                                  Item('lut_min', label="LUT min/max"),
+                                                  Item('lut_max', show_label=False)),
+                                           Item('ignore_blank_slices'),
+                                           HGroup(Item('reset_button', show_label=False)),
+                                           HGroup(Item('record_zoom', show_label=False),
+                                                  Item('reset_zoom', show_label=False),
+                                                  Item('ncols', editor=RangeEditor(Range(0, 100), mode='spinner'))),
+                                           HGroup(Item('view_orientation'))
+                                           )
+                                    ) 
+                             ),
+                      label='Explorer'),
+                Group(Item('dirpath', label='ICA directory'), 
+                      Item('bgimage', label='Structural image'),
+                      Item('tr'),
+                      Item('threshold'),
+                      Item('background_min'),
+                      Item('background_max'),
+                      label='Data'),
+                title   = 'Melodic Results Viewer',
+                width   = settings['width'],
+                height  = settings['height'],
+#                x = 100, y = 100,
+                resizable    = True,
+                key_bindings = key_bindings,
+#        buttons = [ load, save, save_as, quit ],
+                buttons = [ load, save, save_as ],
+                handler = MelodicWindowHandler()
+                )
+
+    def montageXZ(self, X, ncols=0):
         x, y, z = shape(X)
-        mm = int(ceil(sqrt(y) * 1.5) - 1)
-        nn = y / mm + 1
+        if ncols == 0:
+            mm = int(ceil(sqrt(z) * 1.5) - 1)
+        else:
+            mm = ncols
+        nn = z / mm + 1
         
         M = zeros((mm * x, nn * z))
     
@@ -295,16 +421,18 @@ class MelodicWindow(HasTraits):
                 if image_id >= y: 
                     break
                 sliceM, sliceN = j * x, k * z
-    #          print j, k, sliceM, sliceN
                 M[sliceM:sliceM + x, sliceN:sliceN + z] = X[:, image_id, :]
                 image_id += 1
                         
         return M
     
-    def montageYZ(self, X, colormap=cm.gist_gray):
+    def montageYZ(self, X, ncols=0):
         x, y, z = shape(X)
-        mm = int(ceil(sqrt(x) * 1.5) - 1)
-        nn = x / mm + 1
+        if ncols == 0:
+            mm = int(ceil(sqrt(y) * 1.5) - 1)
+        else:
+            mm = ncols
+        nn = y / mm + 1
         
         M = zeros((mm * y, nn * z))
     
@@ -314,18 +442,18 @@ class MelodicWindow(HasTraits):
                 if image_id >= x: 
                     break
                 sliceM, sliceN = j * y, k * z
-    #          print j, k, sliceM, sliceN
                 M[sliceM:sliceM + y, sliceN:sliceN + z] = X[image_id, :, :]
                 image_id += 1
                         
         return M
        
-    def montageXY(self, X, colormap=cm.gist_gray):    
+    def montageXY(self, X, ncols=0):    
         x, y, z = shape(X)
-        mm = int(ceil(sqrt(z) * 1.5)-1)
+        if ncols == 0:
+            mm = int(ceil(sqrt(x) * 1.5) - 1)
+        else:
+            mm = ncols
         nn = z / mm + 1
-    #     print m, n, count
-    #     print mm, nn
         M = zeros((mm * x, nn * y))
     
         image_id = 0
@@ -334,16 +462,16 @@ class MelodicWindow(HasTraits):
                 if image_id >= z: 
                     break
                 sliceM, sliceN = j * x, k * y
-    #          print j, k, sliceM, sliceN
                 M[sliceM:sliceM + x, sliceN:sliceN + y] = X[:, :, image_id]
                 image_id += 1
                         
         return M
     
     def __init__(self, path="", bgpath="", ic=1, *args, **kwargs):
-#        print "MelodicWindow.__init__()"
+        print "MelodicWindow.__init__()"
         super(MelodicWindow, self).__init__(*args, **kwargs)
 #        print "MelodicWindow.__init__() called super"
+                
         self.montage = self.montageXY
         try:
             self.image_axes = self.lbox.add_subplot(1,1,1)
@@ -396,6 +524,10 @@ class MelodicWindow(HasTraits):
     @lru_cache(maxsize=10)
     def get_bgdata(self, path):
         return nb.load(path).get_data()
+    
+    def nonzero_slice_list(self, X):
+        (nx, ny, nz) = X.shape
+        return [n for n in range(0, nz) if np.max(X[:,:,n]) > 0]
 
     @on_trait_change('bgimage')
     def bgimage_changed(self, obj, name, oldpath, path):
@@ -480,11 +612,18 @@ class MelodicWindow(HasTraits):
 
     def display(self):
 #        print "MelodicWindow.display()"
+
         d=self.mel.get_stat_data()
         b=self.bg_data
-    
-        zi = rot90(self.montage(d))
-        bg = rot90(self.montage(b))
+
+        if self.ignore_blank_slices:
+            slices = self.nonzero_slice_list(b)
+        
+            zi = rot90(self.montage(d[:,:,slices],ncols=self.ncols))
+            bg = rot90(self.montage(b[:,:,slices],ncols=self.ncols))
+        else:
+            zi = rot90(self.montage(d,ncols=self.ncols))
+            bg = rot90(self.montage(b,ncols=self.ncols))
     
         self.image_axes.clear()
         self.image_axes.axis('off')
@@ -492,7 +631,8 @@ class MelodicWindow(HasTraits):
     				      vmin=self.background_min, 
     				      vmax=self.background_max)
         bgim.set_interpolation("nearest")
-        if self.show_stats:
+        
+        if self.show_stats and not (self.ic_selected == None):
             cm1 = cm.hot
             cm1.set_under(alpha=0)
             im1 = self.image_axes.imshow(zi, cmap=cm1, vmin=self.lut_min, vmax=self.lut_max)
@@ -502,12 +642,18 @@ class MelodicWindow(HasTraits):
             im2 = self.image_axes.imshow(zi, cmap=cm2, vmax=-self.lut_min, vmin=-self.lut_max)
             im2.set_interpolation("nearest")
     
-        if not hasattr(self, "colorbar"):
-            divider = make_axes_locatable(self.image_axes)
-            cax = divider.append_axes("right", size="2.5%", pad=0.05)
-            self.colorbar = self.image_axes.get_figure().colorbar(im1, cax=cax)
-        self.colorbar.set_clim(self.lut_min, self.lut_max)
-        self.colorbar.update_normal(d)
+        if not self.ic_selected == None:
+            if not hasattr(self, "colorbar"):
+                divider = make_axes_locatable(self.image_axes)
+                cax = divider.append_axes("right", size="2.5%", pad=0.05)
+                self.colorbar = self.image_axes.get_figure().colorbar(im1, cax=cax)
+            self.colorbar.set_clim(self.lut_min, self.lut_max)
+            self.colorbar.update_normal(d)
+
+            if self.ic_selected.class_name in 'Signal':
+                self.image_axes.set_title('Signal!', bbox={'color':'green', 'pad':2, 'width':400})
+            else:
+                self.image_axes.set_title(self.ic_selected.class_name)
     
         y = self.mel.get_mix_data()
         n = y.shape[0]
@@ -525,6 +671,10 @@ class MelodicWindow(HasTraits):
         if self.initialised:
             self.lbox.canvas.draw()
 
+    @on_trait_change('ncols')
+    def ncolsChange(self, ncols):
+        self.display()
+        
     @on_trait_change('view_orientation')
     def orientationChange(self, orient):
         self.montage=getattr(self, 'montage{0}'.format(orient))
@@ -545,11 +695,22 @@ class MelodicWindow(HasTraits):
     #	print "Ding!"
         pass
 
-    @on_trait_change('show_stats')
-    def showStatsChanged(self):
-    #	print "Ding!"
+    @on_trait_change('show_stats,ignore_blank_slices')
+    def optionsChanged(self):
         self.image_axes.clear()
         self.display()
+        
+#    @on_trait_change('ignore_blank_slices')
+#    def ignoreBlanksChanged(self):
+#    #    print "Ding!"
+#        self.image_axes.clear()
+#        self.display()
+#    
+#    @on_trait_change('show_stats')
+#    def showStatsChanged(self):
+#    #	print "Ding!"
+#        self.image_axes.clear()
+#        self.display()
 
     @on_trait_change('ic_list_editor')
     def selectedElementChanged(self):
@@ -601,16 +762,23 @@ class MelodicWindow(HasTraits):
     def file_load(self):
         print "MelodicWindow.file_load()"
         path = os.path.join(self.filedir, self.filename)
-    #	print "Loading file {0}".format(self.filename)
+        print "Loading file {0}".format(path)
     
         try:
+            import re
             f = open(path, 'r')
     
             cl = []
     #	    print len(cl)
             lines = f.readlines()
     #	    print lines[0]
-            self.dirpath=lines[0].strip()
+    
+            icadirpath=lines[0].strip()
+            if re.match('^/', icadirpath):
+                self.dirpath = icadirpath
+            else:
+                self.dirpath = os.path.join(self.filedir, icadirpath)
+
             for ic in arange(0, self.nics):
                 cl.append( Classification(ic_number=ic+1, class_name='Unknown', filter=False) )
 
@@ -624,7 +792,6 @@ class MelodicWindow(HasTraits):
             last_line=lines[-1]
             
             if doFix:
-                import re
                 if re.match('\[[0-9, ]*\]\n$', last_line):
                     
                     for ic in eval(last_line):
@@ -667,112 +834,9 @@ class MelodicWindow(HasTraits):
             print e
             error(None, 'Unable to open file for writing\n{0}'.format(path), title='File I/O error')
     
-    nics = Int(1)
-    ic   = Int(0)
-
-    tr   = Float(2.0)
-
-    lut_min = Float(0)
-    lut_max = Float(10)
-    background_min = Float(0)
-    background_max = Float(10)
-
-
-    needs_saving = Bool(False)
-
-    show_stats = Bool(True)
-
-    filedir  = Str
-    filename = Str
-    file_wildcard = Str("Text file (*.txt)|*.txt|Data file (*.dat)|*.dat|All files|*")
-
-#    quit    = Action(name="Quit", action='do_quit')
-
-    load    = Action(name = "Load classifications...", action = "do_load")
-    save    = Action(name = "Save classifications", action = "do_save",
-		     enabled_when='needs_saving and filename is not ""')
-    save_as = Action(name = "Save as...", action = "do_save_as", enabled_when='needs_saving')
-
-#    reset = Action(name="Reset LUT", action='do_reset_lut')
-
-    reset_button = Button(label="Reset LUT to data max/min")
-    record_zoom  = Button(label="Record Zoom")
-    reset_zoom   = Button(label="Reset Zoom")
-    
-    from traitsui.key_bindings import KeyBinding, KeyBindings
-
-    key_bindings = KeyBindings(
-	KeyBinding( binding1 = 'Ctrl-A',
-		    description = 'previous IC',
-		    method_name = '_prev_button_fired' ),
-	KeyBinding( binding1 = 'Ctrl-Z',
-		    description = 'next IC',
-		    method_name = '_next_button_fired' )
-	)
-
-    ic_selected = Instance(Classification)
-
-    ic_list_editor = TableEditor(columns = [ ObjectColumn( name='ic_number', label='IC#', editable=False ), 
-		                                     #CheckboxColumn( name='filter', cell_color = 'yellow' ),
-		                                     ObjectColumn( name='class_name' ) ],
-                            	selected         = 'ic_selected',
-                            	selection_mode   = 'row',
-                            	rows             = 5,
-                            	row_factory      = Classification)
-
-    orientation_names = ['XY', 'XZ', 'YZ']
-    view_orientation = Enum(values='orientation_names')
-
-    view = View(Group(VSplit(HSplit(
-                                    Item('lbox', 
-					 editor=MPLFigureEditor(),
-#                     editor=CustomEditor(make_plot),
-					 show_label=False, width=0.8),
-				    Item('class_list',
-					 editor=ic_list_editor,
-					 show_label=False, springy=True, resizable=False,
-					 height=0.8)
-				    ),
-			     HSplit(
-                        Item('plots', 
-					 editor=MPLFigureEditor(),
-#                     editor=CustomEditor(make_plot),
-					 show_label=False),
-				    VGroup(Item('ic_selected', label='Classification', style='custom'),
-					   HGroup(Item('show_stats', label='Show statistics'),
-						  Item('lut_min', label="LUT min/max"),
-						  Item('lut_max', show_label=False)),
-                       HGroup(Item('reset_button', show_label=False)),
-                       HGroup(Item('record_zoom', show_label=False),
-                          Item('reset_zoom', show_label=False)),
-                       HGroup(Item('view_orientation'))
-					   )
-				    )
-			     ),
-		      label='Explorer'),
-		Group(Item('dirpath', label='ICA directory'), 
-		      Item('bgimage', label='Structural image'),
-		      Item('tr'),
-		      Item('threshold'),
-		      Item('background_min'),
-		      Item('background_max'),
-		      label='Data'),
-		title   = 'Melodic Results Viewer',
-		width   = 1000,
-		height  = 600,
-		x = 100, y = 100,
-		resizable    = True,
-		key_bindings = key_bindings,
-#        buttons = [ load, save, save_as, quit ],
-        buttons = [ load, save, save_as ],
-		handler = MelodicWindowHandler()
-		)
-
 def main():
+ 
 #    print "__main__"
-    from configobj import ConfigObj
-    import validate
-
     cfg = """
     path   = string(default='')
     bgpath = string(default='')
@@ -780,8 +844,8 @@ def main():
 
 #    print "__main__ reading config"
     config = ConfigObj('melview.ini', configspec=cfg.split("\n"))
-    validator = validate.Validator()
     config.validate(validator, copy=True)
+    
 #    print "__main__ read config"
 
     m = MelodicWindow(path=config['path'], bgpath=config['bgpath'])
@@ -795,5 +859,13 @@ def main():
     except:
         error(None, 'Error while writing config file to working directory.', title='Config error')
 
+    settings['ncols'] = m.ncols
+    
+    try:
+        settings.write()
+    except:
+        error(None, 'Error while writing settings file to home directory.', title='Settings error')
+
+        
 if __name__ == "__main__":
     main()
