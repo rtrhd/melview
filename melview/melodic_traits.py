@@ -38,7 +38,8 @@ from fsl.melodic import *
 # To be able to use PySide or PyQt4 and not run in conflicts with traits,
 # we need to import QtGui and QtCore from pyface.qt
 #from pyface.qt import QtGui, QtCore
-#from pyface.api import FileDialog, OK, confirm, error, YES
+
+from pyface.api import FileDialog, OK, confirm, error, YES
 
 #from PyQt4.QtGui import QWidget, QSizePolicy
 
@@ -199,7 +200,7 @@ from enthought.traits.ui.api import TabularEditor
 class ClassificationColumn(ObjectColumn):
     
     def get_cell_color ( self, object ):
-        return [ 'light blue', 'yellow' ][ object.class_name in ['Signal']]
+        return [ 'light blue', 'light green' ][ object.class_name in ['Signal']]
 
 #class CheckboxColumn(ObjectColumn):
 #    
@@ -653,7 +654,7 @@ class MelodicWindow(HasTraits):
             self.colorbar.update_normal(d)
 
             if self.ic_selected.class_name in 'Signal':
-                self.image_axes.set_title('Signal!', bbox={'color':'green', 'pad':2, 'width':400})
+                self.image_axes.set_title(self.ic_selected.class_name, bbox={'color':'lightgreen'})
             else:
                 self.image_axes.set_title(self.ic_selected.class_name)
     
@@ -697,6 +698,7 @@ class MelodicWindow(HasTraits):
     @on_trait_change('class_list')
     def classListChanged(self):
     #	print "Ding!"
+        self.display()
         pass
 
     @on_trait_change('show_stats,ignore_blank_slices')
