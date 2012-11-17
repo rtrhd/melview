@@ -281,7 +281,9 @@ Are you sure you want to continue?
 #        info.object.reset_zoom()
         
     def do_save_as(self, info):
-        dialog = FileDialog(action="save as", wildcard=info.object.file_wildcard)
+        default_directory = os.path.split(info.object.dirpath)[0]
+        dialog = FileDialog(action="save as", wildcard=info.object.file_wildcard,
+                            default_directory=default_directory)
         dialog.open()
         if dialog.return_code == OK:
             info.object.filedir = dialog.directory
@@ -415,7 +417,7 @@ class MelodicWindow(HasTraits):
             mm = int(ceil(sqrt(z) * 1.5) - 1)
         else:
             mm = ncols
-        nn = z / mm + 1
+        nn = y / mm + 1
         
         M = zeros((mm * x, nn * z))
     
@@ -436,7 +438,7 @@ class MelodicWindow(HasTraits):
             mm = int(ceil(sqrt(y) * 1.5) - 1)
         else:
             mm = ncols
-        nn = y / mm + 1
+        nn = x / mm + 1
         
         M = zeros((mm * y, nn * z))
     
@@ -459,7 +461,7 @@ class MelodicWindow(HasTraits):
             mm = ncols
         nn = z / mm + 1
         M = zeros((mm * x, nn * y))
-    
+
         image_id = 0
         for j in range(mm):
             for k in range(nn):
