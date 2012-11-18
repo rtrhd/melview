@@ -656,7 +656,7 @@ class MelodicWindow(HasTraits):
             self.colorbar.update_normal(d)
 
             if self.ic_selected.class_name in 'Signal':
-                self.image_axes.set_title(self.ic_selected.class_name, bbox={'color':'lightgreen'})
+                self.image_axes.set_title('                                                                  Signal                                                                               ', bbox={'color':'lightgreen'})
             else:
                 self.image_axes.set_title(self.ic_selected.class_name)
     
