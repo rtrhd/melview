@@ -1,6 +1,8 @@
+.pydevproject
 *.pyc
 *.pyo
 build/
 dist/
 *.egg-info
 MANIFEST
+melview.ini
