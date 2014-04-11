@@ -583,7 +583,7 @@ class MelodicWindow(HasTraits):
     {1}
     """.format(path, e),
     		  title="Melodic dir error")
-            self.dirpath=oldpath
+#             self.dirpath=oldpath
 
     def reset_lut(self):
         ic = self.ic_selected
