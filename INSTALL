@@ -1,3 +1,63 @@
-This program is intended to be installed using setuptools:
 
-python ./setup.py install
+For Mac OS X users:
+-------------------
+melview can be installed via MacPorts. Obtain MacPorts (you will need
+Administrator rights for this) from www.macports.org and install git:
+
+sudo port install git
+
+Now get the latest melview sources:
+
+cd ~
+git clone http://users.fmrib.ox.ac.uk/~flitney/melview.git
+
+Now create your own ports directory:
+
+mkdir -p ~/ports/python
+cd ~/ports/python
+cp -r ~/melview/ports/python/melview .
+
+And install melview:
+
+sudo port install melview
+
+
+For RedHat/CentOS users:
+------------------------
+melview is available to install via the FMRIB repository. Unfortunately this
+isn't a public repo so, if you aren't at FMRIB, you will need to follow the
+manual installation instructions below.
+
+
+For Ubuntu users:
+-----------------
+We haven't got a suitable installer prepared yet. Please follow the manual install instructions.
+
+
+For EPD users:
+--------------
+While it is possible to install melview in EPD/Canopy environments Enthought
+have now made their product so hard to use that we feel it is inappropriate for
+all but the most experienced users.
+
+With EPD/Canopy's python the default in your path the program is installed
+manually using setuptools:
+
+sudo python ./setup.py install
+
+
+Manual install instructions:
+----------------------------
+melview has the following Python (current target is Python 2.7) package
+dependencies:
+
+* traitsui
+* matplotlib
+* pyside
+* pyface
+* configobj
+
+Assuming these are present, and you have Administrator (sudo) rights, then you
+should be able to run:
+
+sudo python ./setup.py install

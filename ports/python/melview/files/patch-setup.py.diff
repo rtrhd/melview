@@ -1,0 +1,14 @@
+--- setup.py.orig	2014-09-05 18:09:41.000000000 +0100
++++ setup.py	2014-09-05 18:09:59.000000000 +0100
+@@ -23,11 +23,4 @@
+                     },
+     keywords='melodic viewer',
+     license='GPL',
+-    install_requires=[
+-        'setuptools',
+-        'matplotlib',
+-    	'nibabel',
+-    	'numpy',
+-    	'traitsui',
+-	],
+     )

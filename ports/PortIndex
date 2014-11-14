@@ -1,0 +1,2 @@
+melview 552
+portdir python/melview description {Melodic IC manual classification tool} homepage http://fsl.fmrib.ox.ac.uk/fsl/melodic epoch 0 platforms darwin depends_lib {port:py27-enthoughtbase port:py27-traitsui port:py27-pyside port:py27-pyface port:py27-matplotlib port:py27-nibabel port:py27-configobj} name melview license GPL maintainers dflitney long_description {Melodic is a GUI tool used to explore and classify ICA results as output by the melodic project. See the FSL website for details and a user guide.} version 1.0.1 categories python revision 0
