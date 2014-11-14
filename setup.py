@@ -5,7 +5,7 @@ ez_setup.use_setuptools()
 
 setup(
     name='melview',
-    version='1.0',
+    version='1.0.1',
     description='Melodic ICA data viewer',
     author='Dave Flitney',
     author_email='flitney@fmrib.ox.ac.uk',
