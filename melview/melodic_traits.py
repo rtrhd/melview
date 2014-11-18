@@ -192,10 +192,9 @@ class Classification(HasTraits):
 
     view = View( Item('class_name', show_label=False, style='custom') )
 
-from traitsui.api import TableEditor
+from traitsui.api import TableEditor, TabularEditor
 from traitsui.table_column import ObjectColumn
-from enthought.traits.api import Color
-from enthought.traits.ui.api import TabularEditor
+from traits.api import Color
 
 class ClassificationColumn(ObjectColumn):
     
