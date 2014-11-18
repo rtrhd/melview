@@ -33,6 +33,17 @@ For Ubuntu users:
 -----------------
 We haven't got a suitable installer prepared yet. Please follow the manual install instructions.
 
+The package dependencies (on Ubuntu) were:
+
+ * python-configobj
+ * python-enthoughtbase
+ * python-matplotlib
+ * python-nibabel
+ * python-pyface
+ * python-pyside
+ * python-traits
+ * python-traitsui
+
 
 For EPD users:
 --------------
@@ -51,8 +62,9 @@ Manual install instructions:
 melview has the following Python (current target is Python 2.7) package
 dependencies:
 
-* traitsui
+* enthoughtbase, traits and traitsui
 * matplotlib
+* nibabel
 * pyside
 * pyface
 * configobj
