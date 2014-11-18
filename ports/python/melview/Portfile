@@ -32,7 +32,7 @@ patchfiles		patch-setup.py.diff
 
 depends_lib-append 	port:py${python.version}-traitsui \
 			port:py${python.version}-matplotlib \
-			port:py${python.version}-nibable \
+			port:py${python.version}-nibabel \
 			port:py${python.version}-pyside \
 			port:py${python.version}-pyface \
 			port:py${python.version}-configobj
