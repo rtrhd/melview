@@ -55,7 +55,12 @@ from traitsui.api import  Handler, View, Item, \
     RangeEditor, EnumEditor, InstanceEditor
 
 from traitsui.api import CustomEditor
-from enthought.etsconfig.api import ETSConfig
+# etsconfig moved to traits since ETS 4.0.
+# If enthought is not installed try to import etsconfig from traits.
+try:
+    from enthought.etsconfig.api import ETSConfig
+except ImportError:
+    from traits.etsconfig.api import ETSConfig
 
 from traitsui.menu import Action
 if ETSConfig.toolkit == "wx":
