@@ -1,6 +1,7 @@
+from __future__ import print_function
 from pylab import *
 from fsl.caches import *
-from commands import getoutput
+#from commands import getoutput
 import nibabel as nb
 
 class MelodicIOError(IOError):
@@ -13,7 +14,7 @@ def trace_call(fn):
 
     def wrapped(*v, **k):
         name = fn.__name__
-        print "{0}({1})".format(name, ", ".join(map(repr, chain(v, k.values()))))
+        print("{0}({1})".format(name, ", ".join(map(repr, chain(v, k.values())))))
         traceback.print_stack(limit=2)
         return fn(*v, **k)
     return wrapped
@@ -49,7 +50,7 @@ class melodic:
         tr = 1
         for line in open("{0}/log.txt".format(self.dir)):
             if "--tr" in line:
-                print line
+                print(line)
                 for arg in line.split():
                     if "--tr" in arg:
                         tr = float(arg.split("=")[1])

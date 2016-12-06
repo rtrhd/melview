@@ -1,6 +1,10 @@
+from __future__ import print_function
 import collections
 import functools
-from itertools import ifilterfalse
+try:
+    from itertools import ifilterfalse
+except ImportError:
+    from itertools import filterfalse as ifilterfalse
 from heapq import nsmallest
 from operator import itemgetter
 

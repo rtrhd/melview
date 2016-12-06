@@ -20,7 +20,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
+from __future__ import print_function
 import os
 import re
 os.environ['ETS_TOOLKIT'] = 'qt4'
@@ -507,10 +507,10 @@ class MelodicWindow(HasTraits):
             self.mel.select_component(1)
             if self.initialised:
                 self.display()
-        except ImageFileError, e:
+        except ImageFileError as e:
             pass
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             raise e
         finally:
             self.initialised = True
@@ -541,11 +541,11 @@ class MelodicWindow(HasTraits):
 
     @on_trait_change('bgimage')
     def bgimage_changed(self, obj, name, oldpath, path):
-        print "name={0}, oldpath={1}, path={2}".format(name, oldpath, path)
+        print("name={0}, oldpath={1}, path={2}".format(name, oldpath, path))
         try:
             self.bg_data = self.get_bgdata(path) 
             self.background_min, self.background_max = 0, self.bg_data.max()
-        except IOError, e:
+        except IOError as e:
             error(None, 
     """
     Couldn't change the background image!
@@ -579,7 +579,7 @@ class MelodicWindow(HasTraits):
             self.class_list[:] = cl
     
             self.reset_lut()
-        except IOError, e:
+        except IOError as e:
             error(None, 
     """
     Couldn't find all the required data in {0}. 
@@ -772,9 +772,9 @@ class MelodicWindow(HasTraits):
             self.ic_selected = self.class_list[ic]
 
     def file_load(self):
-        print "MelodicWindow.file_load()"
+        print("MelodicWindow.file_load()")
         path = os.path.join(self.filedir, self.filename)
-        print "Loading file {0}".format(path)
+        print("Loading file {0}".format(path))
     
         try:
             import re
@@ -820,10 +820,10 @@ class MelodicWindow(HasTraits):
             self.display()
     
         except e:
-            print e
+            print(e)
             error(None, 'Unable to open file for reading\n{0}'.format(path), title='File I/O error')
 
-        print "MelodicWindow.file_load()...done"
+        print("MelodicWindow.file_load()...done")
     
     def file_save(self):
         path = os.path.join(self.filedir, self.filename)
@@ -843,7 +843,7 @@ class MelodicWindow(HasTraits):
             self.display()
     
         except e:
-            print e
+            print(e)
             error(None, 'Unable to open file for writing\n{0}'.format(path), title='File I/O error')
     
 def main():
