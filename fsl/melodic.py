@@ -1,14 +1,14 @@
 from __future__ import print_function
 from pylab import *
 from fsl.caches import *
-#from commands import getoutput
 import nibabel as nb
+
 
 class MelodicIOError(IOError):
     pass
 
-def trace_call(fn):
 
+def trace_call(fn):
     from itertools import chain
     import traceback
 
@@ -18,6 +18,7 @@ def trace_call(fn):
         traceback.print_stack(limit=2)
         return fn(*v, **k)
     return wrapped
+
 
 class melodic:
     def __init__(self, path="", ic=1):
@@ -44,8 +45,8 @@ class melodic:
     def select_component(self, ic=1):
         self.ic = ic
 
-        self.stat = self.zstat_data[:,:,:,self.ic-1]
-   
+        self.stat = self.zstat_data[:, :, :, self.ic-1]
+
     def get_tr(self):
         tr = 1
         for line in open("{0}/log.txt".format(self.dir)):
@@ -67,10 +68,10 @@ class melodic:
         return self.stat
 
     def get_mix_data(self):
-        return self.mix[:,self.ic-1]
+        return self.mix[:, self.ic-1]
 
     def get_FTmix_data(self):
-        return self.FTmix[:,self.ic-1]
+        return self.FTmix[:, self.ic-1]
 
     def get_variance_stats(self):
         return (self.exp_var_stats[self.ic-1, 0], self.exp_var_stats[self.ic-1, 1])
