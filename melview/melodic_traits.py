@@ -39,7 +39,7 @@ from fsl.melodic import Melodic
 try:
     from functools import lru_cache
 except ImportError:
-    from fsl.caches import lru_cache
+    from backports.functools_lru_cache import lru_cache
 
 # To be able to use PySide or PyQt4 and not run in conflicts with traits,
 # we need to import QtGui and QtCore from pyface.qt
