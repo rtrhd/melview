@@ -1,7 +1,7 @@
 from __future__ import print_function
-from pylab import *
-from fsl.caches import *
 import nibabel as nb
+import numpy as np
+from os.path import join
 
 
 class MelodicIOError(IOError):
@@ -20,7 +20,7 @@ def trace_call(fn):
     return wrapped
 
 
-class melodic:
+class Melodic:
     def __init__(self, path="", ic=1):
         self.set_directory(path)
         self.select_component(ic)
@@ -29,15 +29,15 @@ class melodic:
         self.dir = path
         self.ic = 1
 
-        mfname = "{0}/melodic_mix".format(self.dir)
-        ffname = "{0}/melodic_FTmix".format(self.dir)
-        bfname = "{0}/mean.nii.gz".format(self.dir)
-        vfname = "{0}/melodic_ICstats".format(self.dir)
-        zfname = "{0}/melodic_IC.nii.gz".format(self.dir)
+        mfname = join(self.dir, "melodic_mix")
+        ffname = join(self.dir, "melodic_FTmix")
+        bfname = join(self.dir, "mean.nii.gz")
+        #vfname = join(self.dir, "melodic_ICstats")
+        zfname = join(self.dir, "melodic_IC.nii.gz")
 
-        self.mix = genfromtxt(mfname)
-        self.FTmix = genfromtxt(ffname)
-        self.exp_var_stats = genfromtxt(vfname)
+        self.mix = np.genfromtxt(mfname)
+        self.FTmix = np.genfromtxt(ffname)
+        #self.exp_var_stats = np.genfromtxt(vfname)
         self.background_image = bfname
         self.zstat_data = nb.load(zfname).get_data()
         self.select_component(self.ic)
@@ -49,7 +49,7 @@ class melodic:
 
     def get_tr(self):
         tr = 1
-        for line in open("{0}/log.txt".format(self.dir)):
+        for line in open(join(self.dir, "log.txt")):
             if "--tr" in line:
                 print(line)
                 for arg in line.split():
@@ -73,5 +73,5 @@ class melodic:
     def get_FTmix_data(self):
         return self.FTmix[:, self.ic-1]
 
-    def get_variance_stats(self):
-        return (self.exp_var_stats[self.ic-1, 0], self.exp_var_stats[self.ic-1, 1])
+    #def get_variance_stats(self):
+    #    return (self.exp_var_stats[self.ic-1, 0], self.exp_var_stats[self.ic-1, 1])

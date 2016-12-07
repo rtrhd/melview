@@ -20,40 +20,46 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from __future__ import print_function
-import os
+from __future__ import division, print_function
+from os.path import join, split, expanduser, exists, dirname, isabs, isdir
+from os import makedirs, environ
+import re
 
-os.environ['ETS_TOOLKIT'] = 'qt4'
-os.environ['QT_API'] = 'pyside'
+environ['ETS_TOOLKIT'] = 'qt4'
+environ['QT_API'] = 'pyside'
 
 import logging
 logging.basicConfig(level=logging.INFO)
 
 import numpy as np
+import nibabel as nb
+from nibabel.py3k import FileNotFoundError
 
-from fsl.melodic import *
-
+from fsl.melodic import Melodic
+try:
+    from functools import lru_cache
+except ImportError:
+    from fsl.caches import lru_cache
 
 # To be able to use PySide or PyQt4 and not run in conflicts with traits,
 # we need to import QtGui and QtCore from pyface.qt
 
 from pyface.api import FileDialog, OK, confirm, error, YES
 
-import matplotlib
 from matplotlib.figure import Figure
 
 from traits.api import (
     HasTraits, File, Directory, List,
-    Button, Str, Int, Float, Bool, Enum, Any, Instance, Range,
+    Button, Str, Int, Float, Bool, Enum, Instance, Range,
     on_trait_change
 )
-from traitsui.api import  (
+from traitsui.api import (
     Handler, View, Item,
-    UItem, HGroup, HSplit, VSplit, VGroup, Group,
-    RangeEditor, EnumEditor, InstanceEditor
+    HGroup, HSplit, VSplit, VGroup, Group,
+    RangeEditor
 )
 
-from traitsui.api import CustomEditor
+
 # etsconfig moved to traits since ETS 4.0.
 # If enthought is not installed try to import etsconfig from traits.
 try:
@@ -62,11 +68,11 @@ except ImportError:
     from traits.etsconfig.api import ETSConfig
 
 from traitsui.menu import Action
+from traitsui.api import TableEditor
+from traitsui.table_column import ObjectColumn
 
-if ETSConfig.toolkit == "wx":
-    from traitsui.wx.editor import Editor
-    from traitsui.wx.basic_editor_factory import BasicEditorFactory
-elif ETSConfig.toolkit == "qt4":
+
+if ETSConfig.toolkit == "qt4":
     from traitsui.qt4.editor import Editor
     from traitsui.qt4.basic_editor_factory import BasicEditorFactory
 
@@ -76,17 +82,31 @@ from nibabel.spatialimages import ImageFileError
 
 from configobj import ConfigObj
 import validate
+import platform
+from errno import EEXIST
+
+
+if platform.system() == 'Linux':
+    settings_file = join(expanduser('~'), '.config', 'melview', 'melviewrc')
+else:
+    settings_file = join(expanduser('~'), '.melviewrc')
+if not exists(dirname(settings_file)):
+    try:
+        makedirs(dirname(settings_file))
+    except OSError as e:  # Guard against race condition
+        if e.errno != EEXIST:
+            raise
+
+opts = [
+    "plot_height = float(0, 2400, default=400)",
+    "plot_width = float(0, 1, default=0.8)",
+    "height = float(0, 1, default=0.8)",
+    "width = float(0, 1, default=0.8)",
+    "ncols = integer(0, 1000, default=0)"
+]
+settings = ConfigObj(settings_file, configspec=opts)
 
 validator = validate.Validator()
-opts = """
-plot_height = float(default=400)
-plot_width = float(default=0.8)
-height = float(default=0.8)
-width = float(default=0.8)
-ncols = integer(default=0)
-"""
-settings_file = os.path.join(os.path.expanduser('~'), '.melviewrc')
-settings = ConfigObj(settings_file, configspec=opts.split("\n"))
 settings.validate(validator, copy=True)
 
 
@@ -96,32 +116,12 @@ class _MPLFigureEditor(Editor):
 
     def init(self, parent):
         self.control = self._create_canvas(parent)
-#        self.set_tooltip()
 
     def update_editor(self):
         pass
 
     def _create_canvas(self, parent):
-        if ETSConfig.toolkit == "wx":
-            from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
-            from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
-            import wx
-
-            """ Create the MPL canvas. """
-            # The panel lets us add additional controls.
-            panel = wx.Panel(parent, -1, style=wx.CLIP_CHILDREN)
-            sizer = wx.BoxSizer(wx.VERTICAL)
-            panel.SetSizer(sizer)
-            # matplotlib commands to create a canvas
-            mpl_control = FigureCanvas(panel, -1, self.value)
-            sizer.Add(mpl_control, 1, wx.LEFT | wx.TOP | wx.GROW)
-            toolbar = NavigationToolbar(mpl_control)
-            sizer.Add(toolbar, 0, wx.EXPAND)
-            self.value.canvas.SetMinSize((10, 10))
-
-            return panel
-
-        elif ETSConfig.toolkit == "qt4":
+        if ETSConfig.toolkit == "qt4":
             from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
             from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as _NavigationToolbar
             from matplotlib.backends.backend_qt4 import cursord
@@ -180,20 +180,15 @@ class Classification(HasTraits):
     view = View(Item('class_name', show_label=False, style='custom'))
 
 
-from traitsui.api import TableEditor, TabularEditor
-from traitsui.table_column import ObjectColumn
-from traits.api import Color
-
-
 class ClassificationColumn(ObjectColumn):
 
     def get_cell_color(self, object):
-        return ['light blue', 'light green'][object.class_name in ['Signal']]
+        return 'light blue' if object.class_name == 'Signal' else 'light green'
 
 
 class MelodicWindowHandler(Handler):
 
-    def do_quit(self,info):
+    def do_quit(self, info):
         info.ui.dispose()
 
     def close(self, info, isok):
@@ -229,7 +224,7 @@ Are you sure you want to continue?
         info.object.file_save()
 
     def do_save_as(self, info):
-        default_directory = os.path.split(info.object.dirpath)[0]
+        default_directory = split(info.object.dirpath)[0]
         dialog = FileDialog(
             action="save as", wildcard=info.object.file_wildcard,
             default_directory=default_directory
@@ -313,7 +308,7 @@ class MelodicWindow(HasTraits):
 
     ic_list_editor = TableEditor(
         columns=[
-            ClassificationColumn(name='ic_number', label='IC#', editable=False), 
+            ClassificationColumn(name='ic_number', label='IC#', editable=False),
             ClassificationColumn(name='class_name')
         ],
         selected='ic_selected',
@@ -385,14 +380,14 @@ class MelodicWindow(HasTraits):
     )
 
     def montageXZ(self, X, ncols=0):
-        x, y, z = shape(X)
+        x, y, z = X.shape
         if ncols == 0:
-            mm = int(ceil(sqrt(z) * 1.5) - 1)
+            mm = int(np.ceil(np.sqrt(z) * 1.5) - 1)
         else:
             mm = ncols
         nn = y / mm + 1
 
-        M = zeros((mm * x, nn * z))
+        M = np.zeros((mm * x, nn * z))
 
         image_id = 0
         for j in range(mm):
@@ -406,14 +401,14 @@ class MelodicWindow(HasTraits):
         return M
 
     def montageYZ(self, X, ncols=0):
-        x, y, z = shape(X)
+        x, y, z = X.shape
         if ncols == 0:
-            mm = int(ceil(sqrt(y) * 1.5) - 1)
+            mm = int(np.ceil(np.sqrt(y) * 1.5) - 1)
         else:
             mm = ncols
         nn = x / mm + 1
 
-        M = zeros((mm * y, nn * z))
+        M = np.zeros((mm * y, nn * z))
 
         image_id = 0
         for j in range(mm):
@@ -427,13 +422,13 @@ class MelodicWindow(HasTraits):
         return M
 
     def montageXY(self, X, ncols=0):
-        x, y, z = shape(X)
+        x, y, z = X.shape
         if ncols == 0:
-            mm = int(ceil(sqrt(x) * 1.5) - 1)
+            mm = int(np.ceil(np.sqrt(x) * 1.5) - 1)
         else:
             mm = ncols
         nn = z / mm + 1
-        M = zeros((mm * x, nn * y))
+        M = np.zeros((mm * x, nn * y))
 
         image_id = 0
         for j in range(mm):
@@ -470,11 +465,8 @@ class MelodicWindow(HasTraits):
             self.mel.select_component(1)
             if self.initialised:
                 self.display()
-        except ImageFileError as e:
+        except (FileNotFoundError, ImageFileError, AttributeError):
             pass
-        except Exception as e:
-            print(e)
-            raise e
         finally:
             self.initialised = True
 
@@ -504,7 +496,7 @@ class MelodicWindow(HasTraits):
 
     @on_trait_change('bgimage')
     def bgimage_changed(self, obj, name, oldpath, path):
-        print("name={0}, oldpath={1}, path={2}".format(name, oldpath, path))
+        logging.debug("name={0}, oldpath={1}, path={2}".format(name, oldpath, path))
         try:
             self.bg_data = self.get_bgdata(path)
             self.background_min, self.background_max = 0, self.bg_data.max()
@@ -528,7 +520,7 @@ Attempting to revert to previous value.
     @on_trait_change('dirpath')
     def dirpath_changed(self, obj, name, oldpath, path):
         try:
-            self.mel = melodic(path, ic=1)
+            self.mel = Melodic(path, ic=1)
             self.bgimage = self.mel.get_bg_image()
             self.update_info()
             self.tr = self.mel.get_tr()
@@ -536,10 +528,10 @@ Attempting to revert to previous value.
                 self.display()
 
             cl = []
-            for ic in arange(0, self.nics):
+            for ic in range(self.nics):
                 cl.append(
                     Classification(
-                        ic_number=ic+1, 
+                        ic_number=ic+1,
                         class_name='Unknown',
                         filter=False
                     )
@@ -550,9 +542,8 @@ Attempting to revert to previous value.
             self.reset_lut()
         except IOError as e:
             error(
-                None,
-    """
-    Couldn't find all the required data in {0}. 
+                None, """
+    Couldn't find all the required data in {0}.
 
     Perhaps this isn't a Melodic directory?
 
@@ -564,7 +555,7 @@ Attempting to revert to previous value.
     def reset_lut(self):
         ic = self.ic_selected
         if ic:
-            if ic.display_max == 0.0 and ic.display_min == 0.0:
+            if ic.display_max == ic.display_min == 0.0:
                 self.lut_min, self.lut_max = self.threshold, self.mel.get_stat_data().max()
             else:
                 self.lut_min, self.lut_max = ic.display_min, ic.display_max
@@ -595,27 +586,27 @@ Attempting to revert to previous value.
         if self.ignore_blank_slices:
             slices = self.nonzero_slice_list(b)
 
-            zi = rot90(self.montage(d[:, :, slices], ncols=self.ncols))
-            bg = rot90(self.montage(b[:, :, slices], ncols=self.ncols))
+            zi = np.rot90(self.montage(d[:, :, slices], ncols=self.ncols))
+            bg = np.rot90(self.montage(b[:, :, slices], ncols=self.ncols))
         else:
-            zi = rot90(self.montage(d, ncols=self.ncols))
-            bg = rot90(self.montage(b, ncols=self.ncols))
+            zi = np.rot90(self.montage(d, ncols=self.ncols))
+            bg = np.rot90(self.montage(b, ncols=self.ncols))
 
         self.image_axes.clear()
         self.image_axes.axis('off')
         bgim = self.image_axes.imshow(
-            bg, cmap=cm.gray,
+            bg, cmap='gray',
             vmin=self.background_min,
             vmax=self.background_max
         )
         bgim.set_interpolation("nearest")
 
         if self.show_stats and self.ic_selected is not None:
-            cm1 = cm.hot
+            cm1 = 'hot'
             cm1.set_under(alpha=0)
             im1 = self.image_axes.imshow(zi, cmap=cm1, vmin=self.lut_min, vmax=self.lut_max)
             im1.set_interpolation("nearest")
-            cm2 = cm.Blues
+            cm2 = 'Blues'
             cm2.set_over(alpha=0)
             im2 = self.image_axes.imshow(zi, cmap=cm2, vmax=-self.lut_min, vmin=-self.lut_max)
             im2.set_interpolation("nearest")
@@ -629,19 +620,19 @@ Attempting to revert to previous value.
             self.colorbar.update_normal(d)
 
             if self.ic_selected.class_name in 'Signal':
-                self.image_axes.set_title('                                                                  Signal                                                                               ', bbox={'color':'lightgreen'})
+                self.image_axes.set_title(67*' ' + 'Signal' + 80*' ', bbox={'color': 'lightgreen'})
             else:
                 self.image_axes.set_title(self.ic_selected.class_name)
 
         y = self.mel.get_mix_data()
         n = y.shape[0]
-        t = arange(0.0, n * self.tr, self.tr)
+        t = np.arange(0.0, n * self.tr, self.tr)
         self.mix_axes.plot(t[:n], y)
 
         y = self.mel.get_FTmix_data()
         n = y.shape[0]
         f = 1.0 / (2 * n * self.tr)
-        t = arange(0.0, n * f, f)
+        t = np.arange(0.0, n * f, f)
         self.ftmix_axes.plot(t[:n], y)
         if self.ftmix_axes.figure.canvas is not None:
             self.ftmix_axes.figure.canvas.draw()
@@ -719,44 +710,47 @@ Attempting to revert to previous value.
             self.ic_selected = self.class_list[ic]
 
     def file_load(self):
-        print("MelodicWindow.file_load()")
-        path = os.path.join(self.filedir, self.filename)
-        print("Loading file {0}".format(path))
+        logging.debug("MelodicWindow.file_load()")
+        path = join(self.filedir, self.filename)
+        logging.debug("Loading file {0}".format(path))
 
         try:
-            import re
-            f = open(path, 'r')
-            cl = []
+            with open(path) as f:
+                lines = f.readlines()
 
-            lines = f.readlines()
-
+            # RHD why do we want to reset this ?
             icadirpath = lines[0].strip()
-            if re.match('^/', icadirpath):
-                self.dirpath = icadirpath
-            else:
-                self.dirpath = os.path.join(self.filedir, icadirpath)
+            icadirpath = icadirpath if isabs(icadirpath) else join(self.filedir, icadirpath)
 
-            for ic in arange(0, self.nics):
-                cl.append(Classification(ic_number=ic+1, class_name='Unknown', filter=False))
+            cl = [
+                Classification(ic_number=ic+1, class_name='Unknown', filter=False)
+                for ic in range(self.nics)
+            ]
 
-            doFix = True
-            for i, fv, c in [
-                (int(i), (fv.strip() == 'True'), c.strip())
-                    for (i, c, fv) in [l.split(',') for l in lines[1:-1]]]:
+            do_fix = True
+            i_c_fv_list = [l.split(',') for l in lines[1:-1]]
 
+            print(i_c_fv_list)
+            i_fv_c_list = [
+                (int(i), fv.strip() == 'True', c.strip())
+                for i, c, fv in i_c_fv_list
+            ]
+
+            for i, fv, c in i_fv_c_list:
                 cl[i-1] = Classification(ic_number=i, class_name=c, filter=fv)
-                doFix = False
+                do_fix = False
 
             last_line = lines[-1]
 
-            if doFix:
+            if do_fix:
                 if re.match('\[[0-9, ]*\]\n$', last_line):
-
                     for ic in eval(last_line):
                         cl[ic-1].class_name = 'Unclassified Noise'
-
                 else:
-                    raise Exception("Bad input in last line of classifications file!")
+                    raise ValueError("Bad input in last line of classifications file!")
+
+            if isdir(icadirpath):
+                self.dirpath = icadirpath
 
             self.class_list[:] = cl
 
@@ -765,41 +759,34 @@ Attempting to revert to previous value.
             self.mark_clean()
             self.display()
 
-        except e:
-            print(e)
-            error(None, 'Unable to open file for reading\n{0}'.format(path), title='File I/O error')
+        except (IOError, ValueError) as e:
+            error(None, 'Unable to read classifications file {0}\n{1}'.format(path, e), title='File Error')
 
-        print("MelodicWindow.file_load()...done")
+        logging.debug("MelodicWindow.file_load()...done")
 
     def file_save(self):
-        path = os.path.join(self.filedir, self.filename)
-
+        path = join(self.filedir, self.filename)
         try:
-            f = open(path, 'w')
+            with open(path, 'w') as f:
+                print(self.dirpath, file=f)
+                for c in self.class_list:
+                    print(c, file=f)
+                print('[' + ','.join([int(ic.ic_number) for ic in self.class_list if ic.filter]) + ']', file=f)
+        except IOError as e:
+            error(None, 'Unable to open file for writing\n{0}\n{1}'.format(path, e), title='File I/O error')
 
-            f.write(self.dirpath + '\n')
-            for c in self.class_list:
-                f.write('{0}\n'.format(c))
-            f.write(str([int(ic.ic_number) for ic in self.class_list if ic.filter == True]) + '\n')
-            f.close()
-
-            self.mark_clean()
-            self.display()
-
-        except e:
-            print(e)
-            error(None, 'Unable to open file for writing\n{0}'.format(path), title='File I/O error')
+        self.mark_clean()
+        self.display()
 
 
 def main():
-    cfg = """
-    path   = string(default='')
-    bgpath = string(default='')
-    """
+    cfg = [
+        "path   = string(default='')",
+        "bgpath = string(default='')"
+    ]
 
-    config = ConfigObj('melview.ini', configspec=cfg.split("\n"))
+    config = ConfigObj('melview.ini', configspec=cfg)
     config.validate(validator, copy=True)
-
     m = MelodicWindow(path=config['path'], bgpath=config['bgpath'])
     m.configure_traits()
 
@@ -808,14 +795,14 @@ def main():
 
     try:
         config.write()
-    except:
-        error(None, 'Error while writing config file to working directory.', title='Config error')
+    except (FileNotFoundError, IOError) as e:
+        error(None, 'Error while writing config file to working directory (%s).' % e, title='Config error')
 
     settings['ncols'] = m.ncols
     try:
         settings.write()
-    except:
-        error(None, 'Error while writing settings file to home directory.', title='Settings error')
+    except (FileNotFoundError, IOError) as e:
+        error(None, 'Error while writing settings file to home directory (%s).' % e, title='Settings error')
 
 
 if __name__ == "__main__":

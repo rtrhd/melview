@@ -1,8 +1,10 @@
-import os
+from __future__ import division, print_function
+from os.path import abspath, join
+import numpy as np
+
 import logging
 
-from fsl.melodic import *
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 
 class Classification():
@@ -24,7 +26,7 @@ class Classification():
 class ClassificationFile():
 
     def __init__(self, filename, **kwargs):
-        self.path = os.path.join('.', filename)
+        self.path = abspath(filename)
 
     def write(self, class_list, dirpath):
         try:
@@ -35,13 +37,13 @@ class ClassificationFile():
             for c in class_list:
                 f.write('{0}\n'.format(c))
             f.write(str(
-                [int(ic.ic_number) for ic in class_list if ic.filter == True]) + '\n'
+                [int(ic.ic_number) for ic in class_list if ic.filter]) + '\n'
             )
 
             f.close()
 
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             logging.error('Error writing file: {0}'.format(e))
 
     def read(self):
@@ -52,11 +54,11 @@ class ClassificationFile():
 
             lines = f.readlines()
             icadirpath = lines[0].strip()
-            mfname = "{0}/melodic_mix".format(icadirpath)
-            mix = genfromtxt(mfname)
+            mfname = join(icadirpath, "melodic_mix")
+            mix = np.genfromtxt(mfname)
             npts, nics = mix.shape
 
-            for ic in arange(0, nics):
+            for ic in range(nics):
                 cl.append(
                     Classification(ic_number=ic+1, class_name='Unknown', filter=False)
                 )
@@ -83,27 +85,30 @@ class ClassificationFile():
 
             return cl, icadirpath
 
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             logging.error('Error reading file: {0}'.format(e))
 
 
 def main():
-    parser = OptionParser()
+    parser = ArgumentParser()
 
-    parser.add_option("-f", "--infile", dest="infilename",
-                      help="read from FILE", metavar="FILE")
-    parser.add_option("-o", "--outfile", dest="outfilename",
-                      help="write to FILE", metavar="FILE")
+    parser.add_argument(
+        "-i", "--infile", dest="infilename", required=True,
+        help="FILE to read from", metavar="MELODICFILE"
+    )
+    parser.add_argument(
+        "-o", "--outfile", dest="outfilename", required=True,
+        help="FILE to write to", metavar="FIXFILE"
+    )
 
-    (options, args) = parser.parse_args()
+    opts = parser.parse_args()
 
-    inf = ClassificationFile(options.infilename)
+    inf = ClassificationFile(opts.infilename)
     class_list, dirpath = inf.read()
-    outf = ClassificationFile(options.outfilename)
+    outf = ClassificationFile(opts.outfilename)
     outf.write(class_list, dirpath)
 
 
 if __name__ == "__main__":
     main()
-
