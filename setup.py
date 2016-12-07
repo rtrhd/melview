@@ -14,7 +14,7 @@ requires = [
     'numpy >= 1.8',
     'scipy >= 0.13'
 ]
-if sys.version < (3, 2, 0):
+if sys.version_info[:3] < (3, 2, 0):
     requires.append('backports.functools_lru_cache >= 1.3')
 
 setup(
