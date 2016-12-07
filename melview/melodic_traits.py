@@ -20,7 +20,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-from __future__ import division, print_function
+from __future__ import division, print_function, absolute_import
 from os.path import join, split, expanduser, exists, dirname, isabs, isdir
 from os import makedirs, environ
 import re
@@ -35,7 +35,7 @@ import numpy as np
 import nibabel as nb
 from nibabel.py3k import FileNotFoundError
 
-from fsl.melodic import Melodic
+from . melodic import Melodic
 try:
     from functools import lru_cache
 except ImportError:
