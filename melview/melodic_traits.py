@@ -521,9 +521,9 @@ Attempting to revert to previous value.
     def dirpath_changed(self, obj, name, oldpath, path):
         try:
             self.mel = Melodic(path, ic=1)
-            self.bgimage = self.mel.get_bg_image()
+            self.bgimage = self.mel.bg_image
             self.update_info()
-            self.tr = self.mel.get_tr()
+            self.tr = self.mel.tr
             if self.initialised:
                 self.display()
 
@@ -556,12 +556,12 @@ Attempting to revert to previous value.
         ic = self.ic_selected
         if ic:
             if ic.display_max == ic.display_min == 0.0:
-                self.lut_min, self.lut_max = self.threshold, self.mel.get_stat_data().max()
+                self.lut_min, self.lut_max = self.threshold, self.mel.stat_data.max()
             else:
                 self.lut_min, self.lut_max = ic.display_min, ic.display_max
 
     def update_info(self):
-        npts, nics = self.mel.get_mix_shape()
+        npts, nics = self.mel.mix_shape
         self.nics = nics
 
     @on_trait_change('lut_min,lut_max')
@@ -580,7 +580,7 @@ Attempting to revert to previous value.
 
     def display(self):
         logging.debug("MelodicWindow.display()")
-        d = self.mel.get_stat_data()
+        d = self.mel.stat_data
         b = self.bg_data
 
         if self.ignore_blank_slices:
@@ -624,12 +624,12 @@ Attempting to revert to previous value.
             else:
                 self.image_axes.set_title(self.ic_selected.class_name)
 
-        y = self.mel.get_mix_data()
+        y = self.mel.mix_data
         n = y.shape[0]
         t = np.arange(0.0, n * self.tr, self.tr)
         self.mix_axes.plot(t[:n], y)
 
-        y = self.mel.get_FTmix_data()
+        y = self.mel.FTmix_data
         n = y.shape[0]
         f = 1.0 / (2 * n * self.tr)
         t = np.arange(0.0, n * f, f)
@@ -701,7 +701,7 @@ Attempting to revert to previous value.
             self.ic_selected = self.class_list[ic]
 
     def _reset_button_fired(self, info):
-        self.lut_min, self.lut_max = self.threshold, self.mel.get_stat_data().max()
+        self.lut_min, self.lut_max = self.threshold, self.mel.stat_data.max()
         self.reset_lut()
 
     def _next_button_fired(self, info):
