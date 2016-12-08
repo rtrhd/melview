@@ -24,6 +24,7 @@ from __future__ import division, print_function, absolute_import
 from os.path import join, split, expanduser, exists, dirname, isabs, isdir
 from os import makedirs, environ
 import re
+import csv
 
 environ['ETS_TOOLKIT'] = 'qt4'
 environ['QT_API'] = 'pyside'
@@ -47,6 +48,7 @@ except ImportError:
 from pyface.api import FileDialog, OK, confirm, error, YES
 
 from matplotlib.figure import Figure
+from matplotlib import cm
 
 from traits.api import (
     HasTraits, File, Directory, List,
@@ -194,9 +196,9 @@ class MelodicWindowHandler(Handler):
     def close(self, info, isok):
         if info.object.dirty():
             response = confirm(info.ui.control, """
-Results have not been saved.
+Results have not been saved yet.
 
-Are you sure you want to exit?
+Are you sure you still want to exit?
 """)
             return response == YES
         else:
@@ -207,7 +209,7 @@ Are you sure you want to exit?
             response = confirm(info.ui.control, """
 Loading will overwrite unsaved results.
 
-Are you sure you want to continue?
+Are you sure you still want to continue?
 """)
 
         if not info.object.dirty() or (response == YES):
@@ -282,8 +284,6 @@ class MelodicWindow(HasTraits):
         enabled_when='needs_saving and filename is not ""'
     )
     save_as = Action(name="Save as...", action="do_save_as", enabled_when='needs_saving')
-
-#    reset = Action(name="Reset LUT", action='do_reset_lut')
 
     reset_button = Button(label="Reset LUT to data max/min")
     record_zoom = Button(label="Record Zoom")
@@ -385,7 +385,7 @@ class MelodicWindow(HasTraits):
             mm = int(np.ceil(np.sqrt(z) * 1.5) - 1)
         else:
             mm = ncols
-        nn = y / mm + 1
+        nn = y // mm + 1
 
         M = np.zeros((mm * x, nn * z))
 
@@ -406,7 +406,7 @@ class MelodicWindow(HasTraits):
             mm = int(np.ceil(np.sqrt(y) * 1.5) - 1)
         else:
             mm = ncols
-        nn = x / mm + 1
+        nn = x // mm + 1
 
         M = np.zeros((mm * y, nn * z))
 
@@ -427,7 +427,7 @@ class MelodicWindow(HasTraits):
             mm = int(np.ceil(np.sqrt(x) * 1.5) - 1)
         else:
             mm = ncols
-        nn = z / mm + 1
+        nn = z // mm + 1
         M = np.zeros((mm * x, nn * y))
 
         image_id = 0
@@ -491,8 +491,8 @@ class MelodicWindow(HasTraits):
         return nb.load(path).get_data()
 
     def nonzero_slice_list(self, X):
-        (nx, ny, nz) = X.shape
-        return [n for n in range(0, nz) if np.max(X[:, :, n]) > 0]
+        nx, ny, nz = X.shape
+        return [n for n in range(nz) if np.max(X[:, :, n]) > 0]
 
     @on_trait_change('bgimage')
     def bgimage_changed(self, obj, name, oldpath, path):
@@ -512,7 +512,7 @@ Attempting to revert to previous value.
 """.format(e),
                 title="Melodic file error"
             )
-            if oldpath != "":
+            if oldpath:
                 self.bgimage = oldpath
         if self.initialised:
             self.display()
@@ -554,7 +554,7 @@ Attempting to revert to previous value.
 
     def reset_lut(self):
         ic = self.ic_selected
-        if ic:
+        if ic is not None:
             if ic.display_max == ic.display_min == 0.0:
                 self.lut_min, self.lut_max = self.threshold, self.mel.stat_data.max()
             else:
@@ -567,7 +567,7 @@ Attempting to revert to previous value.
     @on_trait_change('lut_min,lut_max')
     def change_lut(self):
         ic = self.ic_selected
-        if self.initialised:
+        if ic is not None and self.initialised:
             if self.lut_max > self.lut_min:
                 ic.display_min, ic.display_max = self.lut_min, self.lut_max
                 self.display()
@@ -602,11 +602,11 @@ Attempting to revert to previous value.
         bgim.set_interpolation("nearest")
 
         if self.show_stats and self.ic_selected is not None:
-            cm1 = 'hot'
+            cm1 = cm.hot
             cm1.set_under(alpha=0)
             im1 = self.image_axes.imshow(zi, cmap=cm1, vmin=self.lut_min, vmax=self.lut_max)
             im1.set_interpolation("nearest")
-            cm2 = 'Blues'
+            cm2 = cm.Blues
             cm2.set_over(alpha=0)
             im2 = self.image_axes.imshow(zi, cmap=cm2, vmax=-self.lut_min, vmin=-self.lut_max)
             im2.set_interpolation("nearest")
@@ -619,21 +619,28 @@ Attempting to revert to previous value.
             self.colorbar.set_clim(self.lut_min, self.lut_max)
             self.colorbar.update_normal(d)
 
-            if self.ic_selected.class_name in 'Signal':
-                self.image_axes.set_title(67*' ' + 'Signal' + 80*' ', bbox={'color': 'lightgreen'})
+            if self.ic_selected.class_name == 'Signal':
+                self.image_axes.set_title(
+                    64*' ' + '%d [Signal]' % self.ic_selected.ic_number + 80*' ',
+                    bbox={'color': 'lightblue'}, fontsize=20
+                )
             else:
-                self.image_axes.set_title(self.ic_selected.class_name)
+                self.image_axes.set_title(
+                    '%d [%s]' % (self.ic_selected.ic_number, self.ic_selected.class_name),
+                    fontsize=20
+                )
 
         y = self.mel.mix_data
-        n = y.shape[0]
-        t = np.arange(0.0, n * self.tr, self.tr)
-        self.mix_axes.plot(t[:n], y)
+        t = self.tr * np.arange(len(y))
+        self.mix_axes.plot(t, y)
+        self.mix_axes.set_xlabel('Time (s)')
 
         y = self.mel.FTmix_data
-        n = y.shape[0]
-        f = 1.0 / (2 * n * self.tr)
-        t = np.arange(0.0, n * f, f)
-        self.ftmix_axes.plot(t[:n], y)
+        n = len(y)
+        f = 1.0 / (2 * n * self.tr) * np.arange(n)
+        self.ftmix_axes.plot(f, y)
+        self.ftmix_axes.set_xlabel('Frequency (Hz)')
+
         if self.ftmix_axes.figure.canvas is not None:
             self.ftmix_axes.figure.canvas.draw()
 
@@ -673,6 +680,7 @@ Attempting to revert to previous value.
     @on_trait_change('ic_list_editor')
     def selectedElementChanged(self):
         pass
+        #self.display()
 
     @on_trait_change('ic_selected')
     def selectedChanged(self, obj):
@@ -716,44 +724,36 @@ Attempting to revert to previous value.
 
         try:
             with open(path) as f:
-                lines = f.readlines()
+                lines = [line.strip() for line in f]
+            if not len(lines) < 2:
+                raise ValueError('Specified file (%s) has less than two lines' % path)
 
-            # RHD why do we want to reset this ?
-            icadirpath = lines[0].strip()
-            icadirpath = icadirpath if isabs(icadirpath) else join(self.filedir, icadirpath)
+            icadirpath = lines[0] if isabs(lines[0]) else join(self.filedir, lines[0])
+            if not isdir(icadirpath):
+                raise ValueError('Directory path (%s) specified in %s does not exist' % (icadirpath, path))
 
-            cl = [
+            components = [
                 Classification(ic_number=ic+1, class_name='Unknown', filter=False)
                 for ic in range(self.nics)
             ]
 
-            do_fix = True
-            i_c_fv_list = [l.split(',') for l in lines[1:-1]]
+            rows = [(int(i), c, f == 'True') for i, c, f in csv.reader(lines[1:-1])]
+            if not all(len(row) == 3 for row in rows):
+                raise ValueError('Badly formed component file "%s"' % path)
+            for i, c, f in rows:
+                components[i-1] = Classification(ic_number=i, class_name=c, filter=f)
 
-            print(i_c_fv_list)
-            i_fv_c_list = [
-                (int(i), fv.strip() == 'True', c.strip())
-                for i, c, fv in i_c_fv_list
-            ]
-
-            for i, fv, c in i_fv_c_list:
-                cl[i-1] = Classification(ic_number=i, class_name=c, filter=fv)
-                do_fix = False
-
-            last_line = lines[-1]
-
+            do_fix = len(rows) < 1
             if do_fix:
-                if re.match('\[[0-9, ]*\]\n$', last_line):
-                    for ic in eval(last_line):
-                        cl[ic-1].class_name = 'Unclassified Noise'
+                last_line = lines[-1]
+                if re.match('^\[[0-9, ]*\]$', last_line):
+                    for icstr in last_line[1:-1].split(','):
+                        components[int(icstr)-1].class_name = 'Unclassified Noise'
                 else:
                     raise ValueError("Bad input in last line of classifications file!")
 
-            if isdir(icadirpath):
-                self.dirpath = icadirpath
-
-            self.class_list[:] = cl
-
+            self.dirpath = icadirpath
+            self.class_list[:] = components
             self.ic_selected = self.class_list[0]
 
             self.mark_clean()
